@@ -1,0 +1,14 @@
+{
+    "dram_type": "neupims",
+    "dram_freq": 1000,
+    "pim_config_path": "../extern/NewtonSim/configs/HBM2_8Gb_x128_dualpim.ini",
+    "HBM_size": 32,
+    "HBM_act_buf_size": 512,
+
+    "dram_channels": 32,
+    "dram_req_size": 64,
+    
+    "dram_page_size": 1024,
+    "dram_banks_per_ch": 32,
+    "pim_comp_coverage": 16
+}

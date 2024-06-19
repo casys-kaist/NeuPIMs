@@ -1,0 +1,9 @@
+{
+    "run_mode": "npu+pim",
+    "sub_batch_mode": true,
+    "ch_load_balancing": true,
+    "kernel_fusion": true,
+    "max_batch_size": 128,
+    "max_active_reqs": 130,
+    "max_seq_len": 1024
+}
