@@ -1,0 +1,6 @@
+[submodule "extern/booksim"]
+	path = extern/booksim
+	url = https://github.com/PSAL-POSTECH/booksim.git
+[submodule "extern/FlameGraph"]
+	path = extern/FlameGraph
+	url = https://github.com/brendangregg/FlameGraph.git

@@ -1,0 +1,113 @@
+#ifndef INTERCONNECT_H_
+#define INTERCONNECT_H_
+
+#include <fstream>
+#include <queue>
+#include <stdint.h>
+
+#include "booksim2/booksim_config.hpp"
+#include "booksim2/routefunc.hpp"
+#include "booksim2/globals.hpp"
+
+#include "new_simulator/CycleObject.hpp"
+
+class Network;
+class Flit;
+class GNNTrafficManager;
+class NetworkRequest;
+class Stats;
+class Router;
+
+class Interconnect : public CycleObject {
+public:
+  Interconnect(BookSimConfig offchip_config);
+
+  void cycle(Clock cur_clk) override;
+  bool done() const override;
+  uint32_t get_flit_size() { return flit_size; }
+
+  bool is_full(uint32_t nid, uint32_t subnet, uint32_t size) const;
+  void push(std::unique_ptr<NetworkRequest> net_req, uint32_t subnet);
+  bool is_empty(uint32_t nid, uint32_t subnet) const;
+  const std::unique_ptr<NetworkRequest>& top(uint32_t nid, uint32_t subnet) const;
+  void pop(uint32_t nid, uint32_t subnet);
+
+  void Transfer2BoundaryBuffer(uint32_t subnet, uint32_t output);
+  void WriteOutBuffer(uint32_t subnet, int output, Flit* flit);
+  Flit* GetEjectedFlit(uint32_t subnet, uint32_t nid);
+
+  unsigned long get_cycle() const { return clk; }
+  bool print_activity() { return gPrintActivity; }
+
+  Stats* GetStats(const std::string &name);
+
+  bool gPrintActivity;
+  int gK;
+  int gN;
+  int gC;
+  int gNodes;
+  bool gTrace;
+  std::ofstream *gWatchOut;
+
+  // Anynet
+  std::map<int, int> *anynet_global_routing_table;
+
+  int gNumVCs;
+  int gReadReqBeginVC;
+  int gReadReqEndVC;
+  int gWriteReqBeginVC;
+  int gWriteReqEndVC;
+  int gReadReplyBeginVC;
+  int gReadReplyEndVC;
+  int gWriteReplyBeginVC;
+  int gWriteReplyEndVC;
+  std::map<string, tRoutingFunction> gRoutingFunctionMap;
+
+private:
+  class BoundaryBufferItem {
+  public:
+    BoundaryBufferItem(): num_packets(0) {}
+    inline uint32_t size(void) const { return buffer.size(); }
+    inline bool is_empty() const { return num_packets == 0; }
+    std::unique_ptr<NetworkRequest> pop();
+    const std::unique_ptr<NetworkRequest>& top() const;
+    void push(std::unique_ptr<NetworkRequest> data, bool is_tail);
+    typedef struct Buffer {
+      std::unique_ptr<NetworkRequest> data;
+      bool is_tail;
+    } Buffer;
+  private:
+    std::vector<Buffer> buffer;
+    //std::queue<void*> buffer;
+    //std::queue<bool> tail_flag;
+    uint32_t num_packets;
+  };
+
+  const uint32_t REQUEST_VC = 0;
+  const uint32_t RESPONSE_VC = 1;
+
+  typedef std::queue<Flit*> EjectionBufferItem;
+
+  int num_nodes;
+  uint32_t num_subnets;
+  int vcs;
+  uint32_t flit_size;
+  std::vector<Network*> nets;
+  uint32_t input_buffer_capacity;
+
+  uint32_t boundary_buffer_capacity;
+  // size: [subnets][nodes][vcs]
+  std::vector<std::vector<std::vector<BoundaryBufferItem>>> boundary_buffer;
+  uint32_t ejection_buffer_capacity;
+  std::vector<std::vector<std::vector<EjectionBufferItem>>> ejection_buffer;
+
+  std::vector<std::vector<std::queue<Flit*>>> ejected_flit_queue;
+
+  std::vector<std::vector<int>> round_robin_turn;
+
+  GNNTrafficManager* traffic_manager;
+
+  unsigned long clk;
+};
+
+#endif

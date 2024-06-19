@@ -1,0 +1,202 @@
+#include <fstream>
+#include <sstream>
+#include <algorithm>
+
+#include "Interconnect.hpp"
+
+#include "booksim2/networks/network.hpp"
+#include "booksim2/NetworkRequest.hpp"
+#include "booksim2/GNNTrafficManager.hpp"
+#include "booksim2/routefunc.hpp"
+
+Interconnect::Interconnect(BookSimConfig config) 
+    : CycleObject("interconnect") {
+  num_nodes = config.GetInt("num_nodes");
+  num_subnets = config.GetInt("subnets");
+  assert(num_subnets);
+  nets.resize(num_subnets);
+  InitializeRoutingMap(this, config);
+  for (uint32_t n = 0; n < num_subnets; ++n) {
+    std::ostringstream name;
+    name << "network_" << n;
+    nets[n] = Network::New(config, name.str(), this);
+  }
+
+  flit_size = config.GetInt("flit_size");
+  if (config.GetInt("ejection_buffer_size")) {
+    ejection_buffer_capacity = config.GetInt("ejection_buffer_size");
+  } else {
+    ejection_buffer_capacity = config.GetInt("vc_buf_size");
+  }
+
+  boundary_buffer_capacity = config.GetInt("boundary_buffer_size");
+  assert(boundary_buffer_capacity);
+  if (config.GetInt("input_buffer_size")) {
+    input_buffer_capacity = config.GetInt("input_buffer_size");
+  } else {
+    input_buffer_capacity = 9;
+  }
+
+  std::string watch_file = config.GetStr("watch_out");
+  if (watch_file == "")
+    gWatchOut = nullptr;
+  else if (watch_file == "-")
+    //gWatchOut = &cout;
+    gWatchOut = nullptr;
+  else
+    gWatchOut = new std::ofstream(watch_file);
+
+
+  vcs = config.GetInt("num_vcs");
+
+  // Init buffer
+  boundary_buffer.resize(num_subnets);
+  ejection_buffer.resize(num_subnets);
+  round_robin_turn.resize(num_subnets);
+  ejected_flit_queue.resize(num_subnets);
+
+  for (uint32_t s = 0; s < num_subnets; ++s) {
+    boundary_buffer[s].resize(num_nodes);
+    ejection_buffer[s].resize(num_nodes);
+    round_robin_turn[s].resize(num_nodes);
+    ejected_flit_queue[s].resize(num_nodes);
+
+    for (uint32_t n = 0; n < num_nodes; ++n) {
+      boundary_buffer[s][n].resize(vcs);
+      ejection_buffer[s][n].resize(vcs);
+    }
+  }
+  traffic_manager = 
+    static_cast<GNNTrafficManager*>(TrafficManager::New(config, nets, this));
+  traffic_manager->Init();
+}
+
+Stats* Interconnect::GetStats(const std::string &name) {
+  Stats* test = traffic_manager->getStats(name);
+  if(test == 0){
+    cout<<"warning statistics "<<name<<" not found"<<endl;
+  }
+  return test;
+}
+
+// void Interconnect::cycle(Clock cur_clk) {
+//   traffic_manager->_Step();
+// }
+//
+// bool Interconnect::is_full(uint32_t nid, uint32_t subnet, uint32_t size) const {
+//   uint32_t num_flits = size / flit_size + ((size % flit_size) ? 1 : 0);
+//   // TODO: select input_queue depending on the node (memory and compute)
+//   // currently, set to 0
+//   // [subnets][nodes][vcs]
+//   uint32_t expected_size = 
+//     traffic_manager->_input_queue[subnet][nid][0].size() + num_flits;
+//
+//   return expected_size > input_buffer_capacity;
+// }
+//
+// void Interconnect::push(std::unique_ptr<NetworkRequest> net_req, uint32_t subnet) {
+//   // _GeneratePacket will calculate packet type and the number of flits
+//   traffic_manager->_GeneratePacket(std::move(net_req), subnet, 0, traffic_manager->_time);
+// }
+
+void Interconnect::Transfer2BoundaryBuffer(uint32_t subnet, uint32_t output) {
+  Flit* flit;
+  for (uint32_t vc = 0; vc < vcs; ++vc) {
+    if (!ejection_buffer[subnet][output][vc].empty() && 
+        boundary_buffer[subnet][output][vc].size() < boundary_buffer_capacity) {
+      flit = ejection_buffer[subnet][output][vc].front();
+      assert(flit);
+      ejection_buffer[subnet][output][vc].pop();
+      boundary_buffer[subnet][output][vc].push(std::move(flit->data), flit->tail);
+      // Indicates this flit is already popped from the ejection buffer and
+      // ready for credit return
+      ejected_flit_queue[subnet][output].push(flit);
+      if (flit->head) {
+        assert(flit->dest == output);
+      }
+    }
+  }
+}
+
+void Interconnect::WriteOutBuffer(uint32_t subnet, int output, Flit* flit) {
+  int vc = flit->vc;
+  assert(ejection_buffer[subnet][output][vc].size() < ejection_buffer_capacity);
+  ejection_buffer[subnet][output][vc].push(flit);
+}
+
+Flit* Interconnect::GetEjectedFlit(uint32_t subnet, uint32_t nid) {
+  Flit* flit = NULL;
+  if (!ejected_flit_queue[subnet][nid].empty()) {
+    flit = ejected_flit_queue[subnet][nid].front();
+    ejected_flit_queue[subnet][nid].pop();
+  }
+  return flit;
+}
+
+// bool Interconnect::is_empty(uint32_t nid, uint32_t subnet) const {
+//   auto it = std::find_if(boundary_buffer[subnet][nid].begin(),
+//                          boundary_buffer[subnet][nid].end(),
+//                          [](const BoundaryBufferItem &item) {
+//       return !item.is_empty();
+//   });
+//   return it == boundary_buffer[subnet][nid].end();
+// }
+//
+// const std::unique_ptr<NetworkRequest>& Interconnect::top(uint32_t nid, uint32_t subnet) const {
+//   int turn = round_robin_turn[subnet][nid];
+//   for (int vc = 0; vc < vcs; ++vc) {
+//     if (!boundary_buffer[subnet][nid][turn].is_empty()) {
+//       return boundary_buffer[subnet][nid][turn].top();
+//     }
+//     turn = (turn + 1) % vcs;
+//   }
+//   assert(false);
+//   //return nullptr;
+// }
+//
+// // Pop from compute node clock domain
+// void Interconnect::pop(uint32_t nid, uint32_t subnet) {
+//   int turn = round_robin_turn[subnet][nid];
+//   std::unique_ptr<NetworkRequest> data;
+//   for (int vc = 0; (vc < vcs) && (data == NULL); ++vc) {
+//     if (!boundary_buffer[subnet][nid][turn].is_empty()) {
+//       data = boundary_buffer[subnet][nid][turn].pop();
+//     }
+//     turn = (turn + 1) % vcs;
+//   }
+//   assert(data != nullptr);
+//   if (data) {
+//     round_robin_turn[subnet][nid] = turn;
+//   }
+// }
+
+std::unique_ptr<NetworkRequest> Interconnect::BoundaryBufferItem::pop() {
+  assert(!is_empty());
+  auto it = std::find_if(buffer.begin(), buffer.end(), [](const Buffer& buf) {
+      return buf.is_tail;
+  });
+  std::unique_ptr<NetworkRequest> data = std::move(it->data);
+  buffer.erase(buffer.begin(), it + 1);
+  num_packets--;
+  return data;
+}
+
+const std::unique_ptr<NetworkRequest>& Interconnect::BoundaryBufferItem::top() const {
+  assert(!is_empty());
+  // Find first occurence of tail flag
+  auto it = std::find_if(buffer.begin(), buffer.end(), [](const Buffer &buf) {
+      return buf.is_tail;
+  });
+  assert(it != buffer.end());
+  assert(it->data != nullptr);
+  return it->data;
+}
+
+void Interconnect::BoundaryBufferItem::push(bool is_tail) {
+  // buffer.push_back({std::move(data), is_tail});
+  //buffer.push(data);
+  //tail_flag.push(is_tail);
+  if (is_tail) {
+    num_packets++;
+  }
+}

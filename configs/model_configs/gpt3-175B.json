@@ -1,0 +1,10 @@
+{   
+    "model_name": "GPT3-175B",
+    "model_params_b": 175,
+    "model_vocab_size": 50304,
+    "model_n_layer": 1,
+    "model_n_head": 96,
+    "model_n_embd": 12288,
+    "n_tp": 8,
+    "n_pp": 4
+}

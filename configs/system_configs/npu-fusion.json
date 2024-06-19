@@ -1,0 +1,8 @@
+{
+    "run_mode": "npu",
+    "sub_batch_mode": false,
+    "kernel_fusion": true,
+    "max_batch_size": 512,
+    "max_active_reqs": 512,
+    "max_seq_len": 2049
+}
