@@ -1,6 +1,6 @@
 # NeuPIMs Simulator
 
-This is NeuPIMs cycle-accurate simulator. We integrate open-source [NPU simulator](https://github.com/PSAL-POSTECH/ONNXim) and PIM simulator to implement NeuPIMs simulator.
+This is NeuPIMs cycle-accurate simulator. We integrate open-source [NPU simulator](https://github.com/PSAL-POSTECH/ONNXim) and our in-house PIM simulator based on DRAMsim3 to implement NeuPIMs simulator.
 
 ### Publication
 
