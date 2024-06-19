@@ -1,0 +1,36 @@
+{
+    "num_cores": 1,
+    "core_type": "systolic_ws",
+    "core_freq": 1000,
+    "core_width": 128,
+    "core_height": 128,
+
+    "__sram_size": 7168,
+    "sram_size": 134218,
+    "spad_size": 1024,
+    "accum_spad_size": 1024,
+    "sram_width": 128,
+
+    "process_bit": 32,
+    "vector_core_count": 8,
+    "vector_core_width": 128,
+    "systolic_array_count": 8,
+    "add_latency": 1,
+    "mul_latency": 1,
+    "exp_latency": 1,
+    "gelu_latency": 1,
+    "add_tree_latency": 1,
+    "scalar_sqrt_latency": 1,
+    "scalar_add_latency": 1,
+    "scalar_mul_latency": 1,
+
+    "icnt_type": "simple",
+    "icnt_latency": 1,
+    "icnt_freq": 2000,
+    "icnt_config_path": "../configs/booksim2_configs/fly_c64_m8.icnt",
+
+    "precision": 2,
+    "layout": "NHWC",
+    "scheduler": "simple",
+    "operation_log_output_path": ""
+}

@@ -1,0 +1,10 @@
+{   
+    "model_name": "GPT3-30B",
+    "model_params_b": 30,
+    "model_vocab_size": 50304,
+    "model_n_layer": 1,
+    "model_n_head": 56,
+    "model_n_embd": 7168,
+    "n_tp": 4,
+    "n_pp": 2
+}
